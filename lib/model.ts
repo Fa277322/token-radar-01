@@ -431,6 +431,7 @@ export function radarRow(row: BoardRow): RadarRow {
     comparable_sample: row.model.comparable_sample,
     growth_multiplier: row.model.growth_multiplier,
     maturity_multiplier: row.model.maturity_multiplier,
+    farm_steps: row.farm_steps,
   };
 }
 
