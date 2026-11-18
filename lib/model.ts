@@ -42,10 +42,7 @@ export interface Snapshot {
 
 /** The model's constants, as the dashboard states them and the sandbox may change them. */
 export interface ModelConstants {
-  comp_default: number;
-  comp_min: number;
-  comp_max: number;
-  comp_min_sample: number;
+  base_multiple: number;
   growth_weight: number;
   growth_floor: number;
   growth_cap: number;
@@ -56,15 +53,12 @@ export interface ModelConstants {
 }
 
 export const MODEL: ModelConstants = {
-  comp_default: 0.35,
-  comp_min: 0.15,
-  comp_max: 6,
-  comp_min_sample: 3,
+  base_multiple: 0.25,
   growth_weight: 0.5,
   growth_floor: -60,
   growth_cap: 120,
-  maturity_floor: 0.7,
-  maturity_range: 0.6,
+  maturity_floor: 0.6,
+  maturity_range: 0.4,
   maturity_days: 1095,
   unknown_age_days: 365,
 };
@@ -124,8 +118,6 @@ export interface RadarRow {
   listed_at: string | null;
   age_days: number | null;
   implied_value_usd: number;
-  comparable_multiple: number;
-  comparable_sample: number;
   growth_multiplier: number;
   maturity_multiplier: number;
 }
@@ -154,7 +146,6 @@ export interface RadarData {
   live_size: number;
   rows: RadarRow[];
   live: LiveRow[];
-  watchlist: string[];
 }
 
 /** Why the snapshot is not one this model can score. */
@@ -181,50 +172,17 @@ export function ageDays(asOf: string, listedAt: string | null): number | null {
   return Math.max(0, Math.floor((a - b) / DAY_MS));
 }
 
-/**
- * One category's comparable multiple: the median of mcap_usd / tvl_usd over the snapshot's live-token
- * protocols of that category, clamped into [comp_min, comp_max]. Derived only from the snapshot's own
- * figures, so every category is priced by the market's own record, never a hand-written list.
- */
-export function categoryMultiples(snapshot: Snapshot, model: ModelConstants = MODEL): Map<string, { multiple: number; sample: number }> {
-  const byCategory = new Map<string, number[]>();
-  for (const p of snapshot.protocols) {
-    if (isPreToken(p)) continue;
-    if (p.category === null || p.tvl_usd <= 0 || p.mcap_usd === null || p.mcap_usd <= 0) continue;
-    const list = byCategory.get(p.category) ?? [];
-    list.push(p.mcap_usd / p.tvl_usd);
-    byCategory.set(p.category, list);
-  }
-  const out = new Map<string, { multiple: number; sample: number }>();
-  for (const [category, ratios] of byCategory) {
-    ratios.sort((a, b) => a - b);
-    const mid = ratios.length % 2 === 1 ? ratios[(ratios.length - 1) / 2]! : (ratios[ratios.length / 2 - 1]! + ratios[ratios.length / 2]!) / 2;
-    const clamped = Math.min(model.comp_max, Math.max(model.comp_min, mid));
-    out.set(category, { multiple: ratios.length >= model.comp_min_sample ? clamped : model.comp_default, sample: ratios.length });
-  }
-  return out;
-}
-
-/** The comparable multiple one protocol is priced at: its category's, else the model's default. */
-function comparableFor(p: SnapshotProtocol, multiples: Map<string, { multiple: number; sample: number }>, model: ModelConstants): { multiple: number; sample: number } {
-  if (p.category !== null) {
-    const found = multiples.get(p.category);
-    if (found !== undefined) return found;
-  }
-  return { multiple: model.comp_default, sample: 0 };
-}
-
 /** The three multipliers and the implied value one protocol gets under `model`. */
-export function impliedValue(protocol: SnapshotProtocol, asOf: string, model: ModelConstants, multiples?: Map<string, { multiple: number; sample: number }>): { implied: number; growthPct: number; growthMult: number; maturityMult: number; compMult: number; compSample: number; age: number | null } {
+export function impliedValue(protocol: SnapshotProtocol, asOf: string, model: ModelConstants): { implied: number; growthPct: number; growthMult: number; maturityMult: number; age: number | null } {
   const age = ageDays(asOf, protocol.listed_at);
   const rawGrowth = finite(protocol.change_7d, 0);
   const growthPct = Math.min(model.growth_cap, Math.max(model.growth_floor, rawGrowth));
   const growthMult = 1 + (growthPct / 100) * model.growth_weight;
   const ageForModel = age ?? model.unknown_age_days;
   const maturityMult = model.maturity_floor + (Math.min(Math.max(ageForModel, 0), model.maturity_days) / model.maturity_days) * model.maturity_range;
-  const comp = comparableFor(protocol, multiples ?? new Map(), model);
-  const implied = Math.max(1, Math.round(protocol.tvl_usd * comp.multiple * growthMult * maturityMult));
-  return { implied, growthPct, growthMult, maturityMult, compMult: comp.multiple, compSample: comp.sample, age };
+  const base = protocol.tvl_usd * model.base_multiple;
+  const implied = Math.max(1, Math.round(base * growthMult * maturityMult));
+  return { implied, growthPct, growthMult, maturityMult, age };
 }
 
 /** DefiLlama's version-marker rule: a name ending in a release is a pool of another protocol. */
@@ -256,7 +214,6 @@ export interface BoardSummary {
 /** The protocols the board ranks, strongest first, with ranks 1..n. */
 export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): BoardRow[] {
   const index = bySlug(snapshot.protocols);
-  const multiples = categoryMultiples(snapshot, model);
   const chosen = new Map<string, SnapshotProtocol>();
   // The watchlist is the floor: every slug, even one the snapshot no longer carries (it cannot, but the
   // board's coverage is the gate's row and is never gambled on a missing record).
@@ -273,8 +230,8 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
   for (const p of early) chosen.set(p.slug, p);
 
   const scored = [...chosen.values()].map((p) => {
-    const { implied, growthPct, growthMult, maturityMult, compMult, compSample, age } = impliedValue(p, snapshot.as_of, model, multiples);
-    return { p, implied, growthPct, growthMult, maturityMult, compMult, compSample, age };
+    const { implied, growthPct, growthMult, maturityMult, age } = impliedValue(p, snapshot.as_of, model);
+    return { p, implied, growthPct, growthMult, maturityMult, age };
   });
   scored.sort((a, b) => b.implied - a.implied || (a.p.slug < b.p.slug ? -1 : a.p.slug > b.p.slug ? 1 : 0));
   return scored.map((s, i) => ({
@@ -293,8 +250,7 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
     age_days: s.age,
     implied_value_usd: s.implied,
     model: {
-      comparable_multiple: s.compMult,
-      comparable_sample: s.compSample,
+      base_multiple: model.base_multiple,
       growth_pct: s.growthPct,
       growth_multiplier: round4(s.growthMult),
       maturity_multiplier: round4(s.maturityMult),
@@ -426,8 +382,6 @@ export function radarRow(row: BoardRow): RadarRow {
     listed_at: row.listed_at,
     age_days: row.age_days,
     implied_value_usd: row.implied_value_usd,
-    comparable_multiple: row.model.comparable_multiple,
-    comparable_sample: row.model.comparable_sample,
     growth_multiplier: row.model.growth_multiplier,
     maturity_multiplier: row.model.maturity_multiplier,
   };
@@ -450,7 +404,6 @@ export function buildRadar(snapshot: Snapshot, model: ModelConstants = MODEL): {
     live_size: live.length,
     rows: board.map(radarRow),
     live,
-    watchlist: snapshot.watchlist,
   };
   return { board, radar };
 }
