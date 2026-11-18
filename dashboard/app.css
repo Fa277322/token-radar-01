@@ -96,6 +96,8 @@ tbody tr[data-selected="true"] { background: color-mix(in srgb, var(--accent) 8%
 .implied { display: flex; align-items: center; gap: var(--step-2); }
 .status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.pill { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); vertical-align: middle; }
+.pill.early { background: transparent; color: var(--muted); border: 1px solid var(--border); }
 
 .model { margin-top: var(--step-4); padding: var(--step-5); display: grid; gap: var(--step-3); }
 .formula { font-family: var(--font-num); font-size: 13px; line-height: 1.7; color: var(--muted); overflow-wrap: anywhere; }
