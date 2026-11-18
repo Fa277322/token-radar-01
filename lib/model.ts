@@ -154,6 +154,7 @@ export interface RadarData {
   live_size: number;
   rows: RadarRow[];
   live: LiveRow[];
+  watchlist: string[];
 }
 
 /** Why the snapshot is not one this model can score. */
@@ -449,6 +450,7 @@ export function buildRadar(snapshot: Snapshot, model: ModelConstants = MODEL): {
     live_size: live.length,
     rows: board.map(radarRow),
     live,
+    watchlist: snapshot.watchlist,
   };
   return { board, radar };
 }

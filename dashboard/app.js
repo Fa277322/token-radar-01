@@ -125,6 +125,7 @@
     else window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }
 
+  var WATCH = new Set(DATA.watchlist || []);
   function rows() {
     var q = state.q.trim().toLowerCase();
     return DATA.rows.filter(function (r) {
@@ -226,6 +227,7 @@
         el('td', { class: 'num', text: String(r.rank) }),
         el('td', null, el('div', { class: 'name' },
           el('b', { text: r.name }),
+          WATCH.has(r.slug) ? el('span', { class: 'pill', text: 'watchlist', title: 'On the snapshot watchlist: at or above the $' + Math.round(DATA.floor_usd / 1e6) + 'M floor with no token on record' }) : el('span', { class: 'pill early', text: 'early', title: 'Below the watchlist floor: the early radar found it first' }),
           el('span', { class: 'sub', text: (r.category || 'Other') + ' on ' + (r.chains && r.chains.length ? r.chains.slice(0, 2).join(', ') : 'an unnamed chain') })
         )),
         el('td', { class: 'num', text: fmtUsd(r.tvl_usd) }),
