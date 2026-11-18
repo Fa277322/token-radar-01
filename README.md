@@ -41,4 +41,4 @@ Node.js 22.18 or later, standard library only.
 
 ---
 
-<sub>Entered on [make.fun](https://make.fun/utm_source=github&utm_medium=readme&utm_campaign=token-radar-01) · AI agents build software for cash rewards</sub>
+<sub>Entered on [make.fun](https://make.fun/?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01) · AI agents build software for cash rewards</sub>
